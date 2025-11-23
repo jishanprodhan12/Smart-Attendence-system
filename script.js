@@ -1,31 +1,58 @@
 /**
- * Smart Student Attendance System - Fixed & Polished
+ * Smart Student Attendance System - Final Fixed Version
+ * Features: Auto-Login (Session Persistence), Real Backend, Fixed Reports
  */
 
-// ================= CONSTANTS & STATE =================
 const API_URL = "http://localhost:3000";
 const ADMIN_USER = { username: 'admin', password: 'admin', role: 'admin' };
 const TODAY = new Date().toISOString().split('T')[0];
 
-let students = []; 
-let attendanceRecords = {}; 
-let pendingRequests = []; 
-let notificationHistory = {}; 
+// State Variables
+let students = [];
+let attendanceRecords = {};
+let pendingRequests = [];
+let notificationHistory = {};
 let currentAdminUser = null;
 let currentStudentUser = null;
 let selectedDate = TODAY;
 
-// ================= INIT & LOAD DATA =================
+// ================= 1. INITIALIZATION & SESSION CHECK =================
+
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Load Data from LocalStorage
     loadData();
     
-    // Set default dates
-    document.getElementById('attendanceDate').value = TODAY;
-    const now = new Date();
-    document.getElementById('reportMonthInput').value = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}`;
-    
-    // CHECK SESSION (Fix for refresh logout)
-    checkSession();
+    // 2. Set Default Date Inputs
+    const dateInput = document.getElementById('attendanceDate');
+    if(dateInput) dateInput.value = TODAY;
+
+    const reportInput = document.getElementById('reportMonth');
+    if(reportInput) {
+        const now = new Date();
+        reportInput.value = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}`;
+    }
+
+    // 3. CHECK SESSION (This fixes the Logout on Reload issue)
+    const activeRole = localStorage.getItem('activeRole');
+    const activeUser = localStorage.getItem('activeUser');
+
+    if (activeRole && activeUser) {
+        try {
+            const userObj = JSON.parse(activeUser);
+            // If student, refresh data from latest student list
+            if (activeRole === 'student') {
+                const freshUser = students.find(s => s.id === userObj.id) || userObj;
+                showDashboard('student', freshUser);
+            } else {
+                showDashboard('admin', userObj);
+            }
+        } catch (e) {
+            console.error("Session parse error", e);
+            showDashboard('auth');
+        }
+    } else {
+        showDashboard('auth');
+    }
 });
 
 function loadData() {
@@ -35,7 +62,7 @@ function loadData() {
         pendingRequests = JSON.parse(localStorage.getItem('pendingRequests')) || [];
         notificationHistory = JSON.parse(localStorage.getItem('notificationHistory')) || {};
     } catch (e) {
-        console.error("Data load error", e);
+        console.error("Error loading data", e);
     }
 }
 
@@ -46,57 +73,52 @@ function saveData() {
     localStorage.setItem('notificationHistory', JSON.stringify(notificationHistory));
 }
 
-// ================= AUTHENTICATION & SESSION =================
+// ================= 2. AUTHENTICATION (LOGIN / LOGOUT) =================
 
-function checkSession() {
-    const savedRole = localStorage.getItem('sessionRole');
-    const savedUser = JSON.parse(localStorage.getItem('sessionUser'));
-
-    if (savedRole && savedUser) {
-        showDashboard(savedRole, savedUser);
-    } else {
-        showDashboard('auth');
-    }
-}
-
-function loginUser(role, user) {
-    localStorage.setItem('sessionRole', role);
-    localStorage.setItem('sessionUser', JSON.stringify(user));
+function login(role, user) {
+    // Save session to LocalStorage
+    localStorage.setItem('activeRole', role);
+    localStorage.setItem('activeUser', JSON.stringify(user));
     showDashboard(role, user);
 }
 
-function logoutUser() {
-    localStorage.removeItem('sessionRole');
-    localStorage.removeItem('sessionUser');
+function logout() {
+    // Clear session
+    localStorage.removeItem('activeRole');
+    localStorage.removeItem('activeUser');
     currentAdminUser = null;
     currentStudentUser = null;
     showDashboard('auth');
 }
 
 // Tab Switching
-document.getElementById('signInTab').addEventListener('click', () => toggleAuthForms(true));
-document.getElementById('signUpTab').addEventListener('click', () => toggleAuthForms(false));
+document.getElementById('signInTab').addEventListener('click', () => toggleAuthTabs(true));
+document.getElementById('signUpTab').addEventListener('click', () => toggleAuthTabs(false));
 
-function toggleAuthForms(isSignIn) {
-    document.getElementById('signInForm').classList.toggle('hidden', !isSignIn);
-    document.getElementById('signUpForm').classList.toggle('hidden', isSignIn);
-    
-    const activeClass = ['border-b-2', 'border-purple-600', 'text-purple-700', 'font-bold'];
-    const inactiveClass = ['text-gray-500'];
-    
-    const inTab = document.getElementById('signInTab');
-    const upTab = document.getElementById('signUpTab');
+function toggleAuthTabs(isSignIn) {
+    const signInForm = document.getElementById('signInForm');
+    const signUpForm = document.getElementById('signUpForm');
+    const signInTab = document.getElementById('signInTab');
+    const signUpTab = document.getElementById('signUpTab');
 
-    if(isSignIn) {
-        inTab.classList.add(...activeClass); inTab.classList.remove(...inactiveClass);
-        upTab.classList.remove(...activeClass); upTab.classList.add(...inactiveClass);
+    if (isSignIn) {
+        signInForm.classList.remove('hidden');
+        signUpForm.classList.add('hidden');
+        signInTab.classList.add('tab-active', 'text-purple-700');
+        signInTab.classList.remove('text-gray-500');
+        signUpTab.classList.remove('tab-active', 'text-purple-700');
+        signUpTab.classList.add('text-gray-500');
     } else {
-        upTab.classList.add(...activeClass); upTab.classList.remove(...inactiveClass);
-        inTab.classList.remove(...activeClass); inTab.classList.add(...inactiveClass);
+        signInForm.classList.add('hidden');
+        signUpForm.classList.remove('hidden');
+        signUpTab.classList.add('tab-active', 'text-purple-700');
+        signUpTab.classList.remove('text-gray-500');
+        signInTab.classList.remove('tab-active', 'text-purple-700');
+        signInTab.classList.add('text-gray-500');
     }
 }
 
-// Login Submit
+// Handle Login Submit
 document.getElementById('signInForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const u = document.getElementById('loginUsername').value.trim();
@@ -104,36 +126,37 @@ document.getElementById('signInForm').addEventListener('submit', (e) => {
     const role = document.getElementById('loginRole').value;
 
     if (role === 'admin' && u === ADMIN_USER.username && p === ADMIN_USER.password) {
-        loginUser('admin', ADMIN_USER);
-        showToast("Welcome Admin!", "success");
+        login('admin', ADMIN_USER);
+        showAlert("Welcome Admin!", "success");
     } else if (role === 'student') {
         const s = students.find(stu => stu.username === u && stu.password === p);
         if (s) {
-            loginUser('student', s);
-            showToast(`Welcome ${s.name}`, "success");
+            login('student', s);
+            showAlert(`Welcome ${s.name}`, "success");
         } else {
-            showToast("Invalid Student Credentials", "error");
+            showAlert("Invalid Student Credentials", "error");
         }
     } else {
-        showToast("Invalid Credentials", "error");
+        showAlert("Invalid Credentials", "error");
     }
 });
 
-// Register Submit
+// Handle Register Submit
 document.getElementById('signUpForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('signUpSubmitBtn');
-    btn.disabled = true; btn.innerText = "Processing...";
+    const originalText = btn.innerText;
+    btn.innerText = "Processing..."; btn.disabled = true;
 
     const id = document.getElementById('signUpId').value.trim().toUpperCase();
     
     if (students.some(s => s.id === id)) {
-        showToast("Student ID already exists", "error");
-        btn.disabled = false; btn.innerText = "Register";
+        showAlert("Student ID already exists", "error");
+        btn.innerText = originalText; btn.disabled = false;
         return;
     }
 
-    // Handle File Upload
+    // Photo Upload Logic
     const fileInput = document.getElementById('signUpPhotoFile');
     let photoUrl = null;
 
@@ -145,12 +168,12 @@ document.getElementById('signUpForm').addEventListener('submit', async (e) => {
             const data = await res.json();
             if (data.success) photoUrl = data.photoUrl;
         } catch (err) {
-            console.error(err); // Fail silently for photo, continue reg
+            console.error("Upload failed", err);
         }
     }
 
     const newStudent = {
-        id: id,
+        id, 
         name: document.getElementById('signUpName').value.trim(),
         email: document.getElementById('signUpEmail').value.trim(),
         class: document.getElementById('signUpClass').value.trim(),
@@ -161,63 +184,61 @@ document.getElementById('signUpForm').addEventListener('submit', async (e) => {
 
     students.push(newStudent);
     saveData();
-    showToast("Registration Successful!", "success");
+    showAlert("Registration Successful!", "success");
     e.target.reset();
-    toggleAuthForms(true);
-    btn.disabled = false; btn.innerText = "Register";
+    toggleAuthTabs(true);
+    btn.innerText = originalText; btn.disabled = false;
 });
 
-// ================= NAVIGATION =================
-function showDashboard(view, user = null) {
-    document.getElementById('authPage').classList.add('hidden');
-    document.getElementById('adminDashboard').classList.add('hidden');
-    document.getElementById('studentDashboard').classList.add('hidden');
+document.getElementById('logoutBtnAdmin').addEventListener('click', logout);
+document.getElementById('logoutBtnStudent').addEventListener('click', logout);
 
-    if (view === 'admin') {
+// ================= 3. NAVIGATION & DASHBOARD =================
+
+function showDashboard(role, user) {
+    const authPage = document.getElementById('authPage');
+    const adminDash = document.getElementById('adminDashboard');
+    const studentDash = document.getElementById('studentDashboard');
+
+    authPage.classList.add('hidden');
+    adminDash.classList.add('hidden');
+    studentDash.classList.add('hidden');
+
+    if (role === 'admin') {
         currentAdminUser = user;
-        document.getElementById('adminDashboard').classList.remove('hidden');
+        adminDash.classList.remove('hidden');
         renderAdminDailyView();
-    } else if (view === 'student') {
+    } else if (role === 'student') {
         currentStudentUser = user;
-        document.getElementById('studentDashboard').classList.remove('hidden');
+        studentDash.classList.remove('hidden');
         renderStudentSelf(user);
     } else {
-        document.getElementById('authPage').classList.remove('hidden');
+        authPage.classList.remove('hidden');
     }
 }
 
-document.getElementById('logoutBtnAdmin').addEventListener('click', logoutUser);
-document.getElementById('logoutBtnStudent').addEventListener('click', logoutUser);
+// Admin Tab Switching
+const dailyTab = document.getElementById('dailyTab');
+const reportTab = document.getElementById('reportTab');
+const dailyView = document.getElementById('dailyView');
+const reportView = document.getElementById('reportView');
 
-// Admin View Switching (Daily vs Report)
-document.getElementById('tabDaily').addEventListener('click', () => toggleAdminView('daily'));
-document.getElementById('tabReport').addEventListener('click', () => toggleAdminView('report'));
+dailyTab.addEventListener('click', () => {
+    dailyView.classList.remove('hidden');
+    reportView.classList.add('hidden');
+    dailyTab.className = "tab-active px-4 py-2 text-lg hover:text-purple-700 transition-colors duration-200";
+    reportTab.className = "px-4 py-2 text-lg text-gray-500 hover:text-purple-700 transition-colors duration-200";
+});
 
-function toggleAdminView(viewName) {
-    const dailyContainer = document.getElementById('dailyViewContainer');
-    const reportContainer = document.getElementById('reportViewContainer');
-    const tabDaily = document.getElementById('tabDaily');
-    const tabReport = document.getElementById('tabReport');
+reportTab.addEventListener('click', () => {
+    dailyView.classList.add('hidden');
+    reportView.classList.remove('hidden');
+    reportTab.className = "tab-active px-4 py-2 text-lg hover:text-purple-700 transition-colors duration-200";
+    dailyTab.className = "px-4 py-2 text-lg text-gray-500 hover:text-purple-700 transition-colors duration-200";
+    renderMonthlyReport();
+});
 
-    if (viewName === 'daily') {
-        dailyContainer.classList.remove('hidden');
-        reportContainer.classList.add('hidden');
-        tabDaily.classList.add('bg-white', 'text-purple-700', 'shadow');
-        tabDaily.classList.remove('text-gray-500');
-        tabReport.classList.remove('bg-white', 'text-purple-700', 'shadow');
-        tabReport.classList.add('text-gray-500');
-    } else {
-        dailyContainer.classList.add('hidden');
-        reportContainer.classList.remove('hidden');
-        tabReport.classList.add('bg-white', 'text-purple-700', 'shadow');
-        tabReport.classList.remove('text-gray-500');
-        tabDaily.classList.remove('bg-white', 'text-purple-700', 'shadow');
-        tabDaily.classList.add('text-gray-500');
-        renderMonthlyReport(); // Trigger report generation
-    }
-}
-
-// ================= ADMIN LOGIC (DAILY) =================
+// ================= 4. ADMIN FEATURES (DAILY) =================
 
 document.getElementById('attendanceDate').addEventListener('change', (e) => {
     selectedDate = e.target.value;
@@ -230,15 +251,15 @@ document.getElementById('scanBtn').addEventListener('click', () => {
     const student = students.find(s => s.id === id);
 
     if (!student) {
-        showToast("Student not found", "error");
+        showAlert("Student ID not found", "error");
         return;
     }
-    
+
     const current = getAttendanceStatus(id, selectedDate);
     markAttendance(id, !current, selectedDate);
-    
-    showToast(`${student.name} marked ${!current ? "PRESENT" : "ABSENT"}`, !current ? "success" : "warning");
-    input.value = ""; input.focus();
+    showAlert(`${student.name} marked ${!current ? "PRESENT" : "ABSENT"}`, !current ? "success" : "warning");
+    input.value = "";
+    input.focus();
 });
 
 function getAttendanceStatus(id, date) {
@@ -253,25 +274,36 @@ function markAttendance(id, status, date) {
 }
 
 function renderAdminDailyView() {
-    const date = selectedDate;
     const list = document.getElementById('studentTable');
     list.innerHTML = '';
-    
     let pCount = 0, aCount = 0;
 
+    // Filter Logic
+    const filter = document.getElementById('filterStatus').value;
+
     students.forEach(s => {
-        const isP = getAttendanceStatus(s.id, date) === true;
-        if(isP) pCount++; else aCount++;
+        const isP = getAttendanceStatus(s.id, selectedDate) === true;
+        if (isP) pCount++; else aCount++;
+
+        // Apply Filter
+        if (filter === 'present' && !isP) return;
+        if (filter === 'absent' && isP) return;
 
         const row = document.createElement('tr');
-        row.className = 'border-b hover:bg-gray-50';
+        row.className = 'border-b hover:bg-gray-50 transition';
         row.innerHTML = `
-            <td class="p-3"><img src="${s.photo || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full object-cover border"></td>
-            <td class="p-3">${s.id}</td>
+            <td class="p-3"><img src="${s.photo || '#'}" class="w-10 h-10 rounded-full bg-gray-200 object-cover border"></td>
+            <td class="p-3 font-medium">${s.id}</td>
             <td class="p-3">${s.name}</td>
-            <td class="p-3">${s.class}</td>
-            <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ${isP ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${isP ? 'PRESENT' : 'ABSENT'}</span></td>
-            <td class="p-3"><button onclick="toggleStatus('${s.id}')" class="text-blue-600 hover:underline text-sm">Toggle</button></td>
+            <td class="p-3 text-gray-500">${s.class}</td>
+            <td class="p-3">
+                <span class="px-3 py-1 rounded-full text-xs font-bold ${isP ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    ${isP ? 'PRESENT' : 'ABSENT'}
+                </span>
+            </td>
+            <td class="p-3">
+                <button onclick="toggleStatus('${s.id}')" class="text-purple-600 hover:text-purple-800 font-semibold text-sm">Change</button>
+            </td>
         `;
         list.appendChild(row);
     });
@@ -279,33 +311,40 @@ function renderAdminDailyView() {
     document.getElementById('totalCount').innerText = students.length;
     document.getElementById('presentCount').innerText = pCount;
     document.getElementById('absentCount').innerText = aCount;
-
+    
     renderPendingRequests();
     renderNotificationTable();
 }
+
+document.getElementById('filterStatus').addEventListener('change', renderAdminDailyView);
 
 window.toggleStatus = (id) => {
     const current = getAttendanceStatus(id, selectedDate);
     markAttendance(id, !current, selectedDate);
 };
 
+// Pending Requests
 function renderPendingRequests() {
     const table = document.getElementById('pendingTable');
+    const msg = document.getElementById('noPendingRequests');
     table.innerHTML = '';
-    if(pendingRequests.length === 0) {
-        table.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No pending requests</td></tr>';
+
+    if (pendingRequests.length === 0) {
+        msg.classList.remove('hidden');
         return;
     }
+    msg.classList.add('hidden');
+
     pendingRequests.forEach((req, idx) => {
         const row = document.createElement('tr');
-        row.className = "border-b";
+        row.className = 'border-b hover:bg-gray-50';
         row.innerHTML = `
             <td class="p-3">${req.id}</td>
             <td class="p-3">${req.name}</td>
             <td class="p-3">${req.class}</td>
             <td class="p-3 flex gap-2">
-                <button onclick="handleRequest(${idx}, true)" class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">Accept</button>
-                <button onclick="handleRequest(${idx}, false)" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">Reject</button>
+                <button onclick="handleRequest(${idx}, true)" class="bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600">Approve</button>
+                <button onclick="handleRequest(${idx}, false)" class="bg-red-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-red-600">Reject</button>
             </td>
         `;
         table.appendChild(row);
@@ -314,48 +353,140 @@ function renderPendingRequests() {
 
 window.handleRequest = (index, approve) => {
     const req = pendingRequests[index];
-    if(approve) {
+    if (approve) {
         markAttendance(req.id, true, TODAY);
-        showToast(`Approved ${req.name}`, "success");
+        showAlert(`Approved ${req.name}`, "success");
     }
     pendingRequests.splice(index, 1);
     saveData();
     renderPendingRequests();
 };
 
+// ================= 5. ADMIN FEATURES (MONTHLY REPORT) =================
+
+document.getElementById('reportMonth').addEventListener('change', renderMonthlyReport);
+
+function renderMonthlyReport() {
+    const input = document.getElementById('reportMonth').value;
+    if (!input) return;
+
+    const [year, month] = input.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    const tHead = document.getElementById('reportTableHeader');
+    const tBody = document.getElementById('reportTableBody');
+
+    // 1. Build Header
+    // Note: We use the classes provided in HTML for sticky positioning
+    let headHTML = `
+        <tr class="bg-gray-100 text-gray-600 text-sm">
+            <th class="p-3 border-b sticky-col z-30 bg-gray-100 left-0">ID</th>
+            <th class="p-3 border-b sticky-col z-30 bg-gray-100 left-[60px]">Name</th>
+    `;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month - 1, d);
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sun=0, Sat=6
+        headHTML += `<th class="p-2 border-b text-center min-w-[35px] ${isWeekend ? 'bg-red-50 text-red-400' : ''}">${d}</th>`;
+    }
+    headHTML += `<th class="p-3 border-b bg-green-100 text-center font-bold text-green-800">P</th>
+                 <th class="p-3 border-b bg-red-100 text-center font-bold text-red-800">A</th></tr>`;
+    
+    tHead.innerHTML = headHTML;
+
+    // 2. Build Body
+    tBody.innerHTML = '';
+    
+    students.forEach(s => {
+        let pCount = 0;
+        let aCount = 0;
+
+        let rowHTML = `<tr class="border-b hover:bg-gray-50 transition">
+            <td class="p-3 bg-white border-r sticky-col left-0 font-medium z-10">${s.id}</td>
+            <td class="p-3 bg-white border-r sticky-col left-[60px] z-10 text-gray-600 text-xs">${s.name}</td>`;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isP = getAttendanceStatus(s.id, dateStr);
+            
+            const dateObj = new Date(year, month - 1, d);
+            const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+
+            let cellContent = '';
+            let cellClass = isWeekend ? 'bg-gray-100' : '';
+
+            if (isP === true) {
+                cellContent = '✔'; 
+                cellClass = 'text-green-600 font-bold bg-green-50'; 
+                pCount++;
+            } else if (isP === false) {
+                cellContent = '✘'; 
+                cellClass = 'text-red-600 font-bold bg-red-50'; 
+                aCount++;
+            } else if (!isWeekend) {
+                // If weekday and not marked, count as absent (or neutral depending on policy)
+                // Here we leave it blank but count towards potential absence if strict
+                cellContent = '';
+            }
+            rowHTML += `<td class="p-2 border-r text-center text-sm ${cellClass}">${cellContent}</td>`;
+        }
+
+        rowHTML += `<td class="p-3 text-center bg-green-50 font-bold text-green-700">${pCount}</td>
+                    <td class="p-3 text-center bg-red-50 font-bold text-red-700">${aCount}</td></tr>`;
+        
+        tBody.innerHTML += rowHTML;
+    });
+
+    const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' });
+    document.getElementById('reportSummary').innerText = `Report for ${monthName} ${year} | Total Students: ${students.length}`;
+}
+
+// ================= 6. NOTIFICATIONS & STUDENT VIEW =================
+
 function renderNotificationTable() {
     const table = document.getElementById('notificationTableBody');
+    const msg = document.getElementById('noNotificationNeeded');
     table.innerHTML = '';
-    let hasUrgent = false;
+    let hasData = false;
 
     students.forEach(s => {
         const absences = getConsecutiveAbsences(s.id);
         const alreadySent = notificationHistory[s.id] && notificationHistory[s.id][TODAY];
 
         if (absences >= 3 && !alreadySent) {
-            hasUrgent = true;
+            hasData = true;
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td class="p-3">${s.id}</td>
                 <td class="p-3">${s.name}</td>
+                <td class="p-3 text-sm text-gray-500">${TODAY}</td>
                 <td class="p-3 font-bold text-red-600">${absences} Days</td>
                 <td class="p-3">
-                    <button onclick="sendEmail('${s.id}', '${s.email}', this)" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm">Send Alert</button>
+                    <button onclick="sendEmail('${s.id}', '${s.email}', this)" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm shadow">Alert</button>
                 </td>
             `;
             table.appendChild(row);
         }
     });
 
-    if(!hasUrgent) table.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No urgent alerts needed today.</td></tr>';
+    if (hasData) msg.classList.add('hidden');
+    else msg.classList.remove('hidden');
+    
+    // Count for top cards
+    document.getElementById('notificationCount').innerText = Object.keys(notificationHistory).reduce((acc, id) => {
+        return acc + (notificationHistory[id][TODAY] ? 1 : 0);
+    }, 0);
 }
 
 function getConsecutiveAbsences(id) {
     let count = 0;
     let d = new Date(selectedDate);
-    for(let i=0; i<7; i++) {
+    // Check past 7 days
+    for (let i = 0; i < 7; i++) {
         const dateStr = d.toISOString().split('T')[0];
-        if(getAttendanceStatus(id, dateStr) === true) break;
+        const status = getAttendanceStatus(id, dateStr);
+        if (status === true) break; // Stop at first present
+        // You might want to skip checking weekends here if school is closed
         count++;
         d.setDate(d.getDate() - 1);
     }
@@ -368,101 +499,48 @@ window.sendEmail = async (id, email, btn) => {
         const res = await fetch(`${API_URL}/send-email`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ to: email, subject: `Attendance Warning: ${id}`, body: `Student ${id} is absent for 3+ days.` })
+            body: JSON.stringify({
+                to: email,
+                subject: `Attendance Warning for Student ${id}`,
+                body: `Dear Guardian,\n\nStudent ${id} has been absent for 3 or more consecutive days.\nPlease contact the administration.`
+            })
         });
         const data = await res.json();
-        if(data.success) {
-            showToast("Email Sent!", "success");
-            if(!notificationHistory[id]) notificationHistory[id] = {};
+        if (data.success) {
+            showAlert("Email Sent Successfully", "success");
+            if (!notificationHistory[id]) notificationHistory[id] = {};
             notificationHistory[id][TODAY] = true;
             saveData();
             renderNotificationTable();
-        } else throw new Error(data.message);
+        } else {
+            throw new Error(data.message);
+        }
     } catch (err) {
-        showToast("Email failed", "error");
+        console.error(err);
+        showAlert("Failed to send email", "error");
         btn.innerText = "Retry"; btn.disabled = false;
     }
 };
 
-// ================= REPORT LOGIC (FIXED) =================
-document.getElementById('reportMonthInput').addEventListener('change', renderMonthlyReport);
-
-function renderMonthlyReport() {
-    const input = document.getElementById('reportMonthInput').value;
-    if(!input) return;
-
-    const [year, month] = input.split('-').map(Number); // month is 1-12
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const tHead = document.getElementById('reportHead');
-    const tBody = document.getElementById('reportBody');
-
-    // 1. Build Header
-    let headHTML = '<tr><th class="p-3 bg-gray-200 sticky left-0 z-20">Name</th><th class="p-3 bg-gray-200">ID</th>';
-    for (let d = 1; d <= daysInMonth; d++) {
-        const date = new Date(year, month - 1, d);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'narrow' });
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-        headHTML += `<th class="p-2 text-center min-w-[40px] ${isWeekend ? 'bg-red-50 text-red-400' : ''}">
-            <div class="text-xs text-gray-500">${dayName}</div>
-            <div>${d}</div>
-        </th>`;
-    }
-    headHTML += '<th class="p-3 bg-green-100 text-center">P</th><th class="p-3 bg-red-100 text-center">A</th></tr>';
-    tHead.innerHTML = headHTML;
-
-    // 2. Build Rows
-    tBody.innerHTML = '';
-    students.forEach(s => {
-        let pCount = 0;
-        let aCount = 0;
-        let rowHTML = `<tr class="border-b hover:bg-gray-50">
-            <td class="p-3 sticky left-0 bg-white font-medium z-10 border-r">${s.name}</td>
-            <td class="p-3 border-r text-gray-500 text-xs">${s.id}</td>`;
-
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const dateObj = new Date(year, month - 1, d);
-            const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-            
-            const isP = getAttendanceStatus(s.id, dateStr);
-            
-            let cellContent = '-';
-            let cellClass = isWeekend ? 'bg-gray-100' : '';
-
-            if(isP === true) {
-                cellContent = '✔';
-                cellClass = 'text-green-600 font-bold bg-green-50';
-                pCount++;
-            } else if (isP === false) {
-                cellContent = '✘';
-                cellClass = 'text-red-600 font-bold bg-red-50';
-                aCount++;
-            } else if (!isWeekend) {
-                 // Absent by default if not marked and not weekend
-                 cellContent = '';
-                 aCount++; // Optional: Don't count "future" days or unmarked days as absent if you prefer
-            }
-
-            rowHTML += `<td class="p-2 text-center border-r ${cellClass}">${cellContent}</td>`;
-        }
-
-        rowHTML += `<td class="p-3 text-center font-bold text-green-700 bg-green-50">${pCount}</td>`;
-        rowHTML += `<td class="p-3 text-center font-bold text-red-700 bg-red-50">${aCount}</td>`;
-        rowHTML += '</tr>';
-        tBody.innerHTML += rowHTML;
-    });
-}
-
-// ================= STUDENT LOGIC =================
+// Student Request
 document.getElementById('requestBtn').addEventListener('click', () => {
-    const inputId = document.getElementById('scanInputStudent').value;
-    if(!currentStudentUser || inputId !== currentStudentUser.id) return showToast("ID Mismatch", "error");
-    if(pendingRequests.some(r => r.id === inputId)) return showToast("Already Pending", "warning");
-    if(getAttendanceStatus(inputId, TODAY)) return showToast("Already Present", "success");
+    const inputId = document.getElementById('scanInputStudent').value.trim().toUpperCase();
+    if (!currentStudentUser || inputId !== currentStudentUser.id) {
+        showAlert("ID Mismatch. Enter your own ID.", "error");
+        return;
+    }
+    if (pendingRequests.some(r => r.id === inputId)) {
+        showAlert("Request is pending approval", "warning");
+        return;
+    }
+    if (getAttendanceStatus(inputId, TODAY) === true) {
+        showAlert("You are already marked present", "success");
+        return;
+    }
 
     pendingRequests.push(currentStudentUser);
     saveData();
-    showToast("Request Sent", "info");
+    showAlert("Attendance Requested", "success");
     renderStudentSelf(currentStudentUser);
 });
 
@@ -471,28 +549,89 @@ function renderStudentSelf(user) {
     const table = document.getElementById('studentSelfTable');
     const isP = getAttendanceStatus(user.id, TODAY);
     
-    let statusHTML = isP ? '<span class="text-green-600 font-bold">Present</span>' : 
-                     (pendingRequests.some(r => r.id === user.id) ? '<span class="text-blue-500 font-bold">Pending</span>' : '<span class="text-red-500">Absent</span>');
+    let statusHTML = isP ? '<span class="text-green-600 font-bold">Present</span>' :
+        (pendingRequests.some(r => r.id === user.id) ? '<span class="text-blue-600 font-bold">Pending</span>' : '<span class="text-red-500">Absent</span>');
 
     table.innerHTML = `
         <tr class="bg-gray-50">
-            <td class="p-3"><img src="${user.photo || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full"></td>
+            <td class="p-3"><img src="${user.photo || '#'}" class="w-10 h-10 rounded-full bg-gray-200 object-cover"></td>
             <td class="p-3">${user.id}</td>
             <td class="p-3">${user.name}</td>
             <td class="p-3">${user.class}</td>
             <td class="p-3">${statusHTML}</td>
         </tr>
     `;
+    
+    // Request Msg
+    const msg = document.getElementById('requestMsg');
+    msg.innerText = isP ? "You are present today." : "Please request attendance.";
 }
 
-// ================= UTILS =================
-function showToast(msg, type = 'info') {
-    const container = document.getElementById('toast-container');
+// ================= 7. HELPERS & MODALS =================
+
+function showAlert(msg, type) {
+    // Create container if not exists
+    let container = document.getElementById('toast-container-js');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container-js';
+        container.style.cssText = "position:fixed; bottom:20px; right:20px; display:flex; flex-direction:column; gap:10px; z-index:9999;";
+        document.body.appendChild(container);
+    }
+
     const el = document.createElement('div');
-    const colors = { success: 'bg-green-600', error: 'bg-red-600', warning: 'bg-orange-500', info: 'bg-blue-600' };
-    el.className = `${colors[type]} text-white px-6 py-3 rounded shadow-lg transform transition-all duration-300 translate-y-2 opacity-0 mb-3`;
+    const colors = { success: '#16a34a', error: '#dc2626', warning: '#ca8a04' };
+    el.style.cssText = `background:${colors[type] || '#2563eb'}; color:white; padding:12px 20px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.2); transition: all 0.3s ease; transform: translateY(20px); opacity: 0;`;
     el.innerText = msg;
+    
     container.appendChild(el);
-    requestAnimationFrame(() => el.classList.remove('translate-y-2', 'opacity-0'));
-    setTimeout(() => { el.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => el.remove(), 300); }, 3000);
+    
+    requestAnimationFrame(() => {
+        el.style.transform = 'translateY(0)';
+        el.style.opacity = '1';
+    });
+
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(10px)';
+        setTimeout(() => el.remove(), 300);
+    }, 3000);
 }
+
+// Modal Handling (Add Student)
+const modal = document.getElementById('modal');
+const addBtn = document.getElementById('addBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+
+addBtn.addEventListener('click', () => {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+});
+
+cancelBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+});
+
+// Admin add student form handler (reuses register logic slightly)
+document.getElementById('addForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = document.getElementById('stuId').value.trim().toUpperCase();
+    if(students.some(s => s.id === id)) return showAlert("ID Exists", "error");
+
+    const newStudent = {
+        id, 
+        name: document.getElementById('stuName').value,
+        email: document.getElementById('stuEmail').value,
+        class: document.getElementById('stuClass').value,
+        username: id, 
+        password: id,
+        photo: null // Admin manual add doesn't support file upload in this simple modal without extra JS, or you can add it
+    };
+    students.push(newStudent);
+    saveData();
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    renderAdminDailyView();
+    showAlert("Student Added", "success");
+});
