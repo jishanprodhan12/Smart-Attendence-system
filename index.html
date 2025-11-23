@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Student Attendance System (FINAL)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-active { @apply font-bold border-b-2 border-blue-600; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen p-4">
+
+<section id="authPage" class="flex items-center justify-center min-h-screen">
+  <div class="bg-white p-6 sm:p-8 rounded-lg shadow-md w-full max-w-md">
+    <div class="flex justify-around mb-6 border-b">
+      <button id="signInTab" class="tab-active px-3 py-1">Sign In</button>
+      <button id="signUpTab" class="px-3 py-1">Sign Up</button>
+    </div>
+
+    <form id="signInForm" class="space-y-4">
+      <div>
+        <label class="block text-sm text-gray-600">Username</label>
+        <input id="loginUsername" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Password</label>
+        <input id="loginPassword" type="password" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Role</label>
+        <select id="loginRole" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+            <option value="student">Student</option>
+            <option value="admin">Admin</option>
+        </select>
+      </div>
+      <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Sign In</button>
+    </form>
+
+    <form id="signUpForm" class="space-y-4 hidden">
+      <div>
+        <label class="block text-sm text-gray-600">Student ID</label>
+        <input id="signUpId" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required onkeyup="this.value = this.value.toUpperCase()">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Name</label>
+        <input id="signUpName" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Email (Notification)</label>
+        <input id="signUpEmail" type="email" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Photo (Optional File Upload)</label>
+        <input id="signUpPhotoFile" type="file" accept="image/*" class="border w-full p-2 rounded-md bg-white">
+        <p class="text-xs text-gray-500 mt-1">Requires Node.js server for photo upload.</p>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Class</label>
+        <input id="signUpClass" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Username</label>
+        <input id="signUpUsername" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Password</label>
+        <input id="signUpPassword" type="password" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <button type="submit" id="signUpSubmitBtn" class="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700">Sign Up</button>
+    </form>
+  </div>
+</section>
+
+<section id="adminDashboard" class="hidden py-4">
+  <header class="max-w-5xl mx-auto mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <h1 class="text-2xl font-bold text-blue-700">Admin Dashboard</h1>
+    <div class="flex flex-wrap gap-2">
+      <button id="logoutBtnAdmin" class="border px-3 py-2 rounded-md hover:bg-gray-100">Logout</button>
+      <button id="addBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">+ Add Student</button>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto bg-white rounded-lg shadow p-4 sm:p-6 space-y-6">
+    
+    <div class="border-b pb-4 flex flex-wrap items-center space-x-4">
+        <label for="attendanceDate" class="text-lg font-bold text-blue-700">Select Date:</label>
+        <input type="date" id="attendanceDate" 
+               class="border border-gray-300 p-2 rounded-md bg-white focus:ring-blue-400 focus:border-blue-400"
+               required/>
+    </div>
+
+    <div class="flex flex-wrap justify-between gap-4 border-b pb-4">
+        <div class="text-center">
+            <p class="text-gray-500 text-sm">Total Students</p>
+            <p id="totalCount" class="text-2xl font-bold text-blue-600">0</p>
+        </div>
+        <div class="text-center">
+            <p class="text-gray-500 text-sm">Present on Date</p>
+            <p id="presentCount" class="text-2xl font-bold text-green-600">0</p>
+        </div>
+        <div class="text-center">
+            <p class="text-gray-500 text-sm">Absent on Date</p>
+            <p id="absentCount" class="text-2xl font-bold text-red-600">0</p>
+        </div>
+        <div class="text-center">
+            <p class="text-gray-500 text-sm">Emails Sent (Today)</p>
+            <p id="notificationCount" class="text-2xl font-bold text-orange-600">0</p>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto border rounded-lg p-3">
+        <h2 class="text-lg font-bold mb-2 text-red-700">Manual Email Notification Control (3+ Consecutive Absences)</h2>
+        <table class="w-full border-collapse min-w-[600px]">
+            <thead>
+                <tr class="bg-yellow-50 text-left text-sm text-gray-600">
+                    <th class="p-2 border-b">ID</th>
+                    <th class="p-2 border-b">Name</th>
+                    <th class="p-2 border-b">Last Absent Date</th>
+                    <th class="p-2 border-b">Status</th>
+                    <th class="p-2 border-b">Action</th>
+                </tr>
+            </thead>
+            <tbody id="notificationTableBody"></tbody>
+        </table>
+        <p id="noNotificationNeeded" class="text-center py-4 text-gray-500 hidden">No students require urgent email notification today.</p>
+    </div>
+
+    <div class="overflow-x-auto border-t pt-4">
+      <h2 class="text-lg font-bold mb-2">Pending Attendance Requests</h2>
+      <table class="w-full border-collapse min-w-[500px]">
+        <thead>
+          <tr class="bg-gray-100 text-left text-sm">
+            <th class="p-2 border-b">ID</th>
+            <th class="p-2 border-b">Name</th>
+            <th class="p-2 border-b">Class</th>
+            <th class="p-2 border-b">Action</th>
+          </tr>
+        </thead>
+        <tbody id="pendingTable"></tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-col sm:flex-row justify-between mb-4 gap-4 border-t pt-4">
+      <div class="flex flex-col sm:flex-row gap-2 flex-1">
+        <label class="text-sm text-gray-600">Scan / Enter ID:</label>
+        <input id="scanInput" type="text" placeholder="e.g. STU001"
+               class="border p-2 rounded-md focus:ring-2 focus:ring-blue-400 flex-1" onkeyup="this.value = this.value.toUpperCase()">
+        <button id="scanBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 w-full sm:w-auto">Mark / Undo</button>
+      </div>
+      <div class="flex items-center space-x-2">
+        <label class="text-sm text-gray-600">Filter:</label>
+        <select id="filterStatus" class="border p-2 rounded-md focus:ring-2 focus:ring-blue-400">
+          <option value="all">All</option>
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+        </select>
+      </div>
+    </div>
+
+
+    <div class="overflow-x-auto">
+      <h2 class="text-lg font-bold mb-2">Daily Attendance Records</h2>
+      <table class="w-full border-collapse min-w-[600px]">
+        <thead>
+          <tr class="bg-gray-100 text-left text-sm">
+            <th class="p-2 border-b">Photo</th>
+            <th class="p-2 border-b">ID</th>
+            <th class="p-2 border-b">Name</th>
+            <th class="p-2 border-b">Class</th>
+            <th class="p-2 border-b">Status</th>
+            <th class="p-2 border-b">Action</th>
+          </tr>
+        </thead>
+        <tbody id="studentTable"></tbody>
+      </table>
+    </div>
+  </main>
+</section>
+
+<section id="studentDashboard" class="hidden py-4">
+  <header class="max-w-5xl mx-auto mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <h1 class="text-2xl font-bold text-blue-700">My Attendance</h1>
+    <button id="logoutBtnStudent" class="border px-3 py-2 rounded-md hover:bg-gray-100">Logout</button>
+  </header>
+
+  <main class="max-w-5xl mx-auto bg-white rounded-lg shadow p-4 sm:p-6">
+    <div class="mb-4 flex flex-col sm:flex-row gap-2">
+      <input id="scanInputStudent" placeholder="Enter your ID (e.g. STU001)" class="border p-2 rounded-md flex-1" onkeyup="this.value = this.value.toUpperCase()"/>
+      <button id="requestBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 w-full sm:w-auto">Request Attendance</button>
+    </div>
+    <p id="requestMsg" class="text-sm text-gray-600 mb-4"></p>
+
+    <h2 class="text-lg font-bold mb-2">My Current Status (Today)</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse min-w-[500px]">
+        <thead>
+          <tr class="bg-gray-100 text-left text-sm">
+            <th class="p-2 border-b">Photo</th>
+            <th class="p-2 border-b">ID</th>
+            <th class="p-2 border-b">Name</th>
+            <th class="p-2 border-b">Class</th>
+            <th class="p-2 border-b">Status</th>
+          </tr>
+        </thead>
+        <tbody id="studentSelfTable"></tbody>
+      </table>
+    </div>
+  </main>
+</section>
+
+<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-md">
+    <h2 class="text-lg font-semibold mb-4">Add Student</h2>
+    <form id="addForm" class="space-y-3">
+      <div>
+        <label class="block text-sm text-gray-600">Student ID</label>
+        <input id="stuId" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required onkeyup="this.value = this.value.toUpperCase()">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Name</label>
+        <input id="stuName" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Email (Notification)</label>
+        <input id="stuEmail" type="email" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Photo (Optional File Upload)</label>
+        <input id="stuPhotoFile" type="file" accept="image/*" class="border w-full p-2 rounded-md bg-white">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600">Class</label>
+        <input id="stuClass" type="text" class="border w-full p-2 rounded-md focus:ring-2 focus:ring-blue-400" required>
+      </div>
+      <div class="flex justify-end space-x-2 pt-3">
+        <button type="button" id="cancelBtn" class="px-4 py-2 border rounded-md hover:bg-gray-100">Cancel</button>
+        <button type="submit" id="addSubmitBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
