@@ -61,10 +61,61 @@ function loadData() {
         attendanceRecords = JSON.parse(localStorage.getItem('attendanceRecords')) || {};
         pendingRequests = JSON.parse(localStorage.getItem('pendingRequests')) || [];
         notificationHistory = JSON.parse(localStorage.getItem('notificationHistory')) || {};
+
+        // --- Add default students if not exists ---
+        if (students.length === 0) {
+            const defaultStudents = [
+                {
+                    id: "0272230005101141",
+                    name: "MD. Zeshan Prodhan",
+                    class: "61 b",
+                    dept: "CSE",
+                    email: "mdjishanprodhan132@gmail.com",
+                    username: "0272230005101141",
+                    password: "1141",
+                    photo: null
+                },
+                {
+                    id: "0127223000101062",
+                    name: "Sadia Afrin",
+                    class: "61 b",
+                    dept: "CSE",
+                    email: "sadiafrin9625@gmail.com",
+                    username: "0127223000101062",
+                    password: "1062",
+                    photo: null
+                },
+                {
+                    id: "0272230005101037",
+                    name: "M. T. Tuhin",
+                    class: "61 b",
+                    dept: "CSE",
+                    email: "m.t.tuhin30@gmail.com",
+                    username: "0272230005101037",
+                    password: "1037",
+                    photo: null
+                },
+                {
+                    id: "0272230005101026",
+                    name: "MD. Rotna Akter",
+                    class: "61 b",
+                    dept: "CSE",
+                    email: "rotnaaktar714@gmail.com",
+                    username: "0272230005101026",
+                    password: "1026",
+                    photo: null
+                }
+            ];
+
+            students.push(...defaultStudents);
+            saveData();
+        }
+
     } catch (e) {
         console.error("Error loading data", e);
     }
 }
+
 
 function saveData() {
     localStorage.setItem('students', JSON.stringify(students));
