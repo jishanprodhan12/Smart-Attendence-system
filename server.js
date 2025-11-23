@@ -1,18 +1,18 @@
-// server.js (FIXED)
+// server.js (FINAL)
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
-require('dotenv').config(); // Ensure dotenv is installed and called
+require('dotenv').config(); // Load environment variables from .env file
 
 const app = express();
-const PORT = 3000; // নিশ্চিত করুন যে ফ্রন্টএন্ড (script.js) এই একই পোর্ট ব্যবহার করছে
+const PORT = 3000;
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        // 'uploads' ফোল্ডারটি অবশ্যই তৈরি থাকতে হবে
+        // Ensure the 'uploads' directory exists
         const uploadPath = path.join(__dirname, 'uploads');
         cb(null, uploadPath); 
     },
@@ -28,16 +28,15 @@ const upload = multer({
 // Middleware
 app.use(cors());
 app.use(express.json());
-// Static route for uploaded images
+// Serve static files from the 'uploads' directory (e.g., photos)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); 
 
-
-// Nodemailer transporter setup (Credentials will cause EAUTH if not App Password)
+// Nodemailer transporter setup
 const transporter = nodemailer.createTransport({
     service: 'gmail', 
     auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS // MUST BE GOOGLE APP PASSWORD
+        pass: process.env.EMAIL_PASS // MUST BE THE GOOGLE APP PASSWORD!
     }
 });
 
@@ -49,8 +48,11 @@ app.post('/upload-photo', (req, res) => {
             return res.status(500).json({ success: false, message: `Upload Failed: ${err.message}` });
         }
         if (!req.file) {
-            return res.json({ success: true, message: "No file uploaded." });
+            // No file uploaded scenario
+            return res.json({ success: true, message: "No file uploaded, using default photo." });
         }
+
+        // Return the URL where the file can be accessed from the frontend
         const photoUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
         res.json({ success: true, photoUrl });
     });
@@ -59,12 +61,12 @@ app.post('/upload-photo', (req, res) => {
 // 2. Email Sending Endpoint
 app.post('/send-email', (req, res) => {
     const { to, subject, body } = req.body;
-    
+
     // Check for email credentials before attempting to send
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
         return res.status(500).json({ success: false, message: 'EMAIL_USER or EMAIL_PASS missing in .env file.' });
     }
-
+    
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: to,
@@ -75,17 +77,20 @@ app.post('/send-email', (req, res) => {
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             console.error("Email Error:", error);
-            if (error.code === 'EAUTH') {
-                return res.status(401).json({ success: false, message: 'Authentication Failed. Check App Password.' });
+            // EAUTH error means authentication failed (wrong password/App Password missing)
+            if (error.code === 'EAUTH' || error.responseCode === 535) {
+                // FIX for EAUTH error 
+                return res.status(401).json({ success: false, message: 'Failed to send email. Check SMTP credentials. (Hint: Use a 16-digit Google App Password)' });
             }
-            return res.status(500).json({ success: false, message: `Server error: ${error.message}` });
+            return res.status(500).json({ success: false, message: 'Failed to send email due to server error.' });
         } else {
+            console.log('Email sent: ' + info.response);
             res.json({ success: true, messageId: info.messageId });
         }
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => { // Changed listen address to '0.0.0.0' for wider compatibility
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Attendance Backend Server running on http://localhost:${PORT}`);
-    console.log(`Access photos at http://localhost:${PORT}/uploads/`);
+    console.log(`File uploads will be available at http://localhost:${PORT}/uploads/`);
 });
