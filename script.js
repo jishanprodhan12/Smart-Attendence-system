@@ -16,7 +16,7 @@ let currentAdminUser = null;
 let currentStudentUser = null;
 let selectedDate = TODAY;
 
-// ================= 1. INITIALIZATION & SESSION CHECK =================
+// INITIALIZATION & SESSION CHECK 
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Load Data from LocalStorage
@@ -62,7 +62,7 @@ function loadData() {
         pendingRequests = JSON.parse(localStorage.getItem('pendingRequests')) || [];
         notificationHistory = JSON.parse(localStorage.getItem('notificationHistory')) || {};
 
-        // --- Add default students if not exists ---
+        // Add default students if not exists 
         if (students.length === 0) {
             const defaultStudents = [
                 {
@@ -124,7 +124,7 @@ function saveData() {
     localStorage.setItem('notificationHistory', JSON.stringify(notificationHistory));
 }
 
-// ================= 2. AUTHENTICATION (LOGIN / LOGOUT) =================
+// 2. AUTHENTICATION (LOGIN / LOGOUT) 
 
 function login(role, user) {
     // Save session to LocalStorage
@@ -289,7 +289,7 @@ reportTab.addEventListener('click', () => {
     renderMonthlyReport();
 });
 
-// ================= 4. ADMIN FEATURES (DAILY) =================
+//  4. ADMIN FEATURES (DAILY) 
 
 document.getElementById('attendanceDate').addEventListener('change', (e) => {
     selectedDate = e.target.value;
@@ -413,7 +413,7 @@ window.handleRequest = (index, approve) => {
     renderPendingRequests();
 };
 
-// ================= 5. ADMIN FEATURES (MONTHLY REPORT) =================
+//  5. ADMIN FEATURES (MONTHLY REPORT) 
 
 document.getElementById('reportMonth').addEventListener('change', renderMonthlyReport);
 
@@ -492,7 +492,7 @@ function renderMonthlyReport() {
     document.getElementById('reportSummary').innerText = `Report for ${monthName} ${year} | Total Students: ${students.length}`;
 }
 
-// ================= 6. NOTIFICATIONS & STUDENT VIEW =================
+//  6. NOTIFICATIONS & STUDENT VIEW 
 
 function renderNotificationTable() {
     const table = document.getElementById('notificationTableBody');
@@ -618,7 +618,7 @@ function renderStudentSelf(user) {
     msg.innerText = isP ? "You are present today." : "Please request attendance.";
 }
 
-// ================= 7. HELPERS & MODALS =================
+// =7. HELPERS & MODALS
 
 function showAlert(msg, type) {
     // Create container if not exists
@@ -686,3 +686,4 @@ document.getElementById('addForm').addEventListener('submit', (e) => {
     renderAdminDailyView();
     showAlert("Student Added", "success");
 });
+
