@@ -1,4 +1,5 @@
-// server.js (FINAL)
+// server.js (FINAL) 
+
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
@@ -9,29 +10,32 @@ require('dotenv').config(); // Load environment variables from .env file
 const app = express();
 const PORT = 3000;
 
-// Multer setup for file uploads
+// --- Multer setup for file uploads ---
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         // Ensure the 'uploads' directory exists
         const uploadPath = path.join(__dirname, 'uploads');
+        // Note: The 'uploads' directory must be created manually or handled by an installer script 
+        // if it doesn't exist when the server starts.
         cb(null, uploadPath); 
     },
     filename: (req, file, cb) => {
+        // Creates a unique filename (timestamp + original name)
         cb(null, Date.now() + '-' + file.originalname);
     }
 });
 const upload = multer({ 
     storage: storage,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-}).single('studentPhoto'); 
+}).single('studentPhoto'); // Expecting a single file with the field name 'studentPhoto'
 
-// Middleware
+// --- Middleware Setup ---
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // To parse JSON bodies
 // Serve static files from the 'uploads' directory (e.g., photos)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); 
 
-// Nodemailer transporter setup
+// --- Nodemailer transporter setup ---
 const transporter = nodemailer.createTransport({
     service: 'gmail', 
     auth: {
@@ -40,11 +44,14 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// 1. Photo Upload Endpoint
+// ==========================================================
+// 1. Photo Upload Endpoint (POST /upload-photo)
+// ==========================================================
 app.post('/upload-photo', (req, res) => {
     upload(req, res, (err) => {
         if (err) {
             console.error("Upload Error:", err);
+            // Handle file size limits or other multer errors gracefully
             return res.status(500).json({ success: false, message: `Upload Failed: ${err.message}` });
         }
         if (!req.file) {
@@ -58,11 +65,13 @@ app.post('/upload-photo', (req, res) => {
     });
 });
 
-// 2. Email Sending Endpoint
+// ==========================================================
+// 2. Email Sending Endpoint (POST /send-email)
+// ==========================================================
 app.post('/send-email', (req, res) => {
     const { to, subject, body } = req.body;
 
-    // Check for email credentials before attempting to send
+    // Critical check for environment variables (This was the source of previous issues)
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
         return res.status(500).json({ success: false, message: 'EMAIL_USER or EMAIL_PASS missing in .env file.' });
     }
@@ -71,7 +80,8 @@ app.post('/send-email', (req, res) => {
         from: process.env.EMAIL_USER,
         to: to,
         subject: subject,
-        text: body,
+        text: body, // For plain text email body
+        // html: body // Use this if you want to send HTML formatted email
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -90,6 +100,8 @@ app.post('/send-email', (req, res) => {
     });
 });
 
+
+// --- Server Start ---
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Attendance Backend Server running on http://localhost:${PORT}`);
     console.log(`File uploads will be available at http://localhost:${PORT}/uploads/`);
